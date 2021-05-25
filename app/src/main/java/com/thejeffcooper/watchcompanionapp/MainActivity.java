@@ -9,6 +9,8 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
@@ -28,6 +30,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static android.bluetooth.le.ScanSettings.CALLBACK_TYPE_FIRST_MATCH;
+
 public class MainActivity extends AppCompatActivity {
 
     private static String CHANNEL_ID = "channel";
@@ -39,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
     private Handler handler = new Handler();
     private static final long SCAN_PERIOD = 100000;
 
-    ParcelUuid HRM_UUID = new ParcelUuid(UUID.fromString("0000180D-0000-1000-8000-00805f9b34fb"));
+    ParcelUuid WATCH_SERVICE_UUID = new ParcelUuid(UUID.fromString("a77a0001-fbfe-4392-b88c-9c1e376cf37c"));
 
     private void createNotificationChannel() {
         CharSequence name = getString(R.string.channel_name);
@@ -103,8 +107,14 @@ public class MainActivity extends AppCompatActivity {
                 Log.i("BT", "started scan");
                 scanning = true;
                 List<ScanFilter> filters = new ArrayList<ScanFilter>();
-                filters.add(new ScanFilter.Builder().setServiceUuid(HRM_UUID).build());
-                bluetoothLeScanner.startScan(filters, new ScanSettings.Builder().build(), leScanCallback);
+                filters.add(new ScanFilter.Builder()
+                        .setServiceUuid(WATCH_SERVICE_UUID)
+                        .build());
+                bluetoothLeScanner.startScan(filters,
+                        new ScanSettings.Builder()
+                                .setCallbackType(CALLBACK_TYPE_FIRST_MATCH)
+                                .build(),
+                        leScanCallback);
             } else {
                 scanning = false;
                 bluetoothLeScanner.stopScan(leScanCallback);
@@ -118,17 +128,16 @@ public class MainActivity extends AppCompatActivity {
                 public void onScanResult(int callbackType, ScanResult result) {
                     super.onScanResult(callbackType, result);
                     BluetoothDevice dev = result.getDevice();
+                    dev.connectGatt(getApplicationContext(), true, new BluetoothGattCallback() {
+                        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newstate) {
+                            Log.i("Callback", "connection state changed");
+                        }
+                    });
                     if (dev.getName() == null) {
-                        //Log.i("DEVICE_FOUND", dev.getAddress());
+                        Log.i("DEVICE_FOUND", dev.getAddress());
                     } else {
                         Log.i("DEVICE_FOUND", dev.getName());
                         ScanRecord rec = result.getScanRecord();
-                        for (int i = 0; i < rec.getManufacturerSpecificData().size(); i++) {
-                            int key = rec.getManufacturerSpecificData().keyAt(i);
-                            byte[] val = rec.getManufacturerSpecificData().valueAt(key);
-                            Log.i("DEVICE_DATA", String.format("0x%x\t'%s'", key, new String(val)));
-                        }
-
                     }
                 }
             };
